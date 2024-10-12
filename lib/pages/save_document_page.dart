@@ -83,7 +83,7 @@ class _SaveDocumentPageState extends State<SaveDocumentPage> {
             name: nameController!.text,
             path: widget.pathImage,
             category: selectCategory!,
-            createdAt: DateFormat('yyyy-MM-ddTHH:mm:ss').format(DateTime.now()),
+            createdAt: DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
           );
           DocumentLocalDatasource.instance.saveDocument(model);
           Navigator.pop(

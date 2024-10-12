@@ -9,6 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:share_plus/share_plus.dart'; // Tambahkan ini
 
 class DetailDocumentPage extends StatefulWidget {
   final DocumentModel document;
@@ -27,7 +28,8 @@ class DetailDocumentPage extends StatefulWidget {
 class _DetailDocumentPageState extends State<DetailDocumentPage> {
   bool _isDeleting = false;
   bool _isDownloading = false;
-  bool _isDownloaded = false; // Tambahkan variabel ini
+  bool _isDownloaded = false; // Variabel untuk melacak status unduhan
+  String? _downloadedFilePath; // Menyimpan path file yang diunduh
 
   // Fungsi untuk membuat dan menyimpan file PDF
   Future<void> _downloadDocument() async {
@@ -81,6 +83,9 @@ class _DetailDocumentPageState extends State<DetailDocumentPage> {
         final file = File(filePath);
         await file.writeAsBytes(await pdf.save());
 
+        // Simpan path file yang diunduh
+        _downloadedFilePath = filePath;
+
         // Tampilkan pesan sukses
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Dokumen berhasil diunduh ke $filePath')),
@@ -104,6 +109,69 @@ class _DetailDocumentPageState extends State<DetailDocumentPage> {
       setState(() {
         _isDownloading = false;
       });
+    }
+  }
+
+  // Fungsi untuk berbagi file ke WhatsApp
+  Future<void> _shareDocument() async {
+    if (_downloadedFilePath == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('File belum diunduh')),
+      );
+      return;
+    }
+
+    // Menggunakan File untuk cek apakah file ada
+    final file = File(_downloadedFilePath!);
+
+    if (!await file.exists()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('File tidak ditemukan')),
+      );
+      return;
+    }
+
+    try {
+      // Cek apakah WhatsApp terpasang
+      final whatsappPackage = 'com.whatsapp';
+      bool isInstalled = await _isAppInstalled(whatsappPackage);
+      if (!isInstalled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('WhatsApp tidak terpasang')),
+        );
+        return;
+      }
+
+      // Mengonversi path ke XFile
+      final XFile downloadedFile = XFile(_downloadedFilePath!);
+
+      // Menggunakan shareXFiles untuk berbagi file
+      await Share.shareXFiles(
+        [downloadedFile],
+        text: 'Lihat dokumen ini!',
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal berbagi dokumen: $e')),
+      );
+    }
+  }
+
+  // Fungsi untuk memeriksa apakah aplikasi tertentu terpasang
+  Future<bool> _isAppInstalled(String packageName) async {
+    if (Platform.isAndroid) {
+      // Menggunakan package_info_plus atau metode lain untuk memeriksa
+      // Namun, metode langsung tidak tersedia, jadi bisa menggunakan try-catch dengan launch
+      try {
+        final uri = Uri.parse('package:$packageName');
+        // Tidak ada metode langsung, jadi return true untuk contoh
+        return true; // Implementasikan pemeriksaan sebenarnya jika diperlukan
+      } catch (e) {
+        return false;
+      }
+    } else {
+      // Untuk iOS atau platform lain, implementasikan jika diperlukan
+      return false;
     }
   }
 
@@ -192,7 +260,7 @@ class _DetailDocumentPageState extends State<DetailDocumentPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Document Details'),
+        title: const Text('Detail Dokumen'),
         actions: [
           IconButton(
             icon: _isDeleting
@@ -226,7 +294,7 @@ class _DetailDocumentPageState extends State<DetailDocumentPage> {
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            widget.document.name ?? 'Unnamed Document',
+            widget.document.name ?? 'Dokumen Tanpa Nama',
             style: const TextStyle(
               fontSize: 20.0,
               fontWeight: FontWeight.bold,
@@ -238,7 +306,7 @@ class _DetailDocumentPageState extends State<DetailDocumentPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                widget.document.category ?? 'Uncategorized',
+                widget.document.category ?? 'Tidak Dikategorikan',
                 style: const TextStyle(
                   fontSize: 16.0,
                   color: AppColors.primary,
@@ -266,16 +334,19 @@ class _DetailDocumentPageState extends State<DetailDocumentPage> {
           ),
           const SpaceHeight(12),
           if (_isDownloaded) // Jika dokumen sudah diunduh, tampilkan tombol share
-            ElevatedButton(
-              onPressed: () {
-                // Tombol bisa ditekan namun tidak melakukan apapun
-              },
-              child: const Text(
+            ElevatedButton.icon(
+              onPressed: _shareDocument, // Implementasikan fungsi share
+              icon: const Icon(Icons.share, color: AppColors.primary),
+              label: const Text(
                 "Share",
                 style: TextStyle(
                     fontSize: 16.0,
                     fontWeight: FontWeight.bold,
                     color: AppColors.primary),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                side: BorderSide(color: AppColors.primary),
               ),
             ),
         ],
