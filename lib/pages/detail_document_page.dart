@@ -27,6 +27,7 @@ class DetailDocumentPage extends StatefulWidget {
 class _DetailDocumentPageState extends State<DetailDocumentPage> {
   bool _isDeleting = false;
   bool _isDownloading = false;
+  bool _isDownloaded = false; // Tambahkan variabel ini
 
   // Fungsi untuk membuat dan menyimpan file PDF
   Future<void> _downloadDocument() async {
@@ -84,6 +85,10 @@ class _DetailDocumentPageState extends State<DetailDocumentPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Dokumen berhasil diunduh ke $filePath')),
         );
+
+        setState(() {
+          _isDownloaded = true; // Set menjadi true setelah berhasil diunduh
+        });
       } else {
         // Tampilkan pesan jika izin ditolak
         ScaffoldMessenger.of(context).showSnackBar(
@@ -127,16 +132,25 @@ class _DetailDocumentPageState extends State<DetailDocumentPage> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Konfirmasi'),
+        title: const Text(
+          "Konfirmasi",
+          style: TextStyle(color: AppColors.primary),
+        ),
         content: const Text('Apakah Anda yakin ingin menghapus dokumen ini?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Batal'),
+            child: const Text(
+              "Batal",
+              style: TextStyle(color: AppColors.primary),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Hapus'),
+            child: const Text(
+              "Hapus",
+              style: TextStyle(color: AppColors.red),
+            ),
           ),
         ],
       ),
@@ -250,6 +264,20 @@ class _DetailDocumentPageState extends State<DetailDocumentPage> {
               color: AppColors.primary.withOpacity(0.2),
             ),
           ),
+          const SpaceHeight(12),
+          if (_isDownloaded) // Jika dokumen sudah diunduh, tampilkan tombol share
+            ElevatedButton(
+              onPressed: () {
+                // Tombol bisa ditekan namun tidak melakukan apapun
+              },
+              child: const Text(
+                "Share",
+                style: TextStyle(
+                    fontSize: 16.0,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary),
+              ),
+            ),
         ],
       ),
     );
