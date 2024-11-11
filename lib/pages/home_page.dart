@@ -71,9 +71,10 @@ class _HomePageState extends State<HomePage> {
                       DocumentScannerOptions documentOptions =
                           DocumentScannerOptions(
                         documentFormat: DocumentFormat.jpeg,
-                        mode: ScannerMode.filter,
+                        mode: ScannerMode.full,
                         pageLimit: 1,
                         isGalleryImport: true,
+                        
                       );
 
                       final documentScanner =
