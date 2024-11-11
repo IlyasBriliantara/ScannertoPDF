@@ -39,6 +39,9 @@ class _LatestDocumentsPageState extends State<LatestDocumentsPage> {
       ),
       itemBuilder: (context, index) {
         final document = widget.documents[index];
+        // Pisahkan paths untuk mendapatkan gambar pertama
+        final List<String> imagePaths = document.path!.split(',');
+
         return Container(
           margin: const EdgeInsets.all(8.0),
           decoration: BoxDecoration(
@@ -65,7 +68,7 @@ class _LatestDocumentsPageState extends State<LatestDocumentsPage> {
                     borderRadius: BorderRadius.circular(8),
                     child: Image.file(
                       width: double.infinity,
-                      File(document.path!),
+                      File(imagePaths[0]), // Menampilkan gambar pertama
                       fit: BoxFit.cover,
                       colorBlendMode: BlendMode.colorBurn,
                       color: AppColors.primary.withOpacity(0.2),
