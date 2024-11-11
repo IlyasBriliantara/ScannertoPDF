@@ -32,14 +32,14 @@ dependencies:
   flutter:
     sdk: flutter
   google_fonts: ^6.2.1
-  google_mlkit_document_scanner: ^0.2.1
+  google_mlkit_document_scanner: ^0.3.0
   intl: ^0.19.0
   sqflite: ^2.3.3+1
   permission_handler: ^10.2.0
   path_provider: ^2.0.14
   pdf: ^3.9.0
   share_plus: ^10.0.3
-
+  shared_preferences: ^2.3.2
 dev_dependencies:
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
