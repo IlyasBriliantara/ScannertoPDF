@@ -5,11 +5,14 @@ import 'package:flutter_scanner_card_app/core/colors.dart';
 import 'package:flutter_scanner_card_app/core/spaces.dart';
 import 'package:flutter_scanner_card_app/data/models/document_model.dart';
 import 'package:flutter_scanner_card_app/data/datasources/document_local_datasource.dart';
+import 'package:flutter_scanner_card_app/pages/save_document_page.dart';
+import 'package:google_mlkit_document_scanner/google_mlkit_document_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:share_plus/share_plus.dart'; // Tambahkan ini
+import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DetailDocumentPage extends StatefulWidget {
   final DocumentModel document;
@@ -28,23 +31,184 @@ class DetailDocumentPage extends StatefulWidget {
 class _DetailDocumentPageState extends State<DetailDocumentPage> {
   bool _isDeleting = false;
   bool _isDownloading = false;
-  bool _isDownloaded = false; // Variabel untuk melacak status unduhan
-  String? _downloadedFilePath; // Menyimpan path file yang diunduh
+  bool _isDownloaded = false;
+  String? _downloadedFilePath;
+  String? _selectedPageSize;
 
-  // Fungsi untuk membuat dan menyimpan file PDF
+  @override
+  void initState() {
+    super.initState();
+    _loadDownloadStatus();
+  }
+
+  List<String> _getScannedImages() {
+    return widget.document.path?.split(',') ?? [];
+  }
+
+  void _showFullImage(String imagePath) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          contentPadding: EdgeInsets.all(16),
+          content: GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: InteractiveViewer(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Image.file(File(imagePath)),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildImageListView() {
+    final images = _getScannedImages();
+    return SizedBox(
+      height: 200,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: images.length,
+        itemBuilder: (context, index) {
+          return Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: GestureDetector(
+              onTap: () => _showFullImage(images[index]),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Image.file(File(images[index])),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _loadDownloadStatus() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? filePath =
+        prefs.getString('downloadedFilePath_${widget.document.id}');
+    setState(() {
+      _isDownloaded = filePath != null;
+      _downloadedFilePath = filePath;
+    });
+  }
+
+  Future<void> _saveDownloadStatus(String filePath) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setString('downloadedFilePath_${widget.document.id}', filePath);
+    setState(() {
+      _isDownloaded = true;
+      _downloadedFilePath = filePath;
+    });
+  }
+
+  // Menampilkan popup pilihan ukuran halaman
+  // Modifikasi pada fungsi _showPageSizeDialog
+  Future<void> _showPageSizeDialog() async {
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            // Atur lebar maksimum dialog berdasarkan ukuran layar
+            double dialogWidth =
+                constraints.maxWidth > 300 ? 300 : constraints.maxWidth * 0.9;
+            return AlertDialog(
+              title: const Text(
+                'Select Page Size',
+                style: TextStyle(color: AppColors.primary),
+              ),
+              content: SizedBox(
+                width: dialogWidth,
+                child: StatefulBuilder(
+                  builder: (context, setState) {
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        RadioListTile<String>(
+                          title: const Text('Custom (Without Margin)'),
+                          value: 'custom',
+                          groupValue: _selectedPageSize,
+                          onChanged: (String? value) {
+                            setState(() {
+                              _selectedPageSize = value;
+                            });
+                          },
+                        ),
+                        RadioListTile<String>(
+                          title: const Text('A4 (With Margin)'),
+                          value: 'A4',
+                          groupValue: _selectedPageSize,
+                          onChanged: (String? value) {
+                            setState(() {
+                              _selectedPageSize = value;
+                            });
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              actionsAlignment: MainAxisAlignment.spaceBetween,
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: AppColors.primary),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _downloadDocument();
+                  },
+                  child: const Text(
+                    'Download',
+                    style: TextStyle(color: AppColors.primary),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Fungsi unduh dokumen yang telah diubah agar mendukung pilihan ukuran halaman
   Future<void> _downloadDocument() async {
+    if (_isDownloaded) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Dokumen sudah diunduh di $_downloadedFilePath'),
+          backgroundColor: AppColors.primary,
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isDownloading = true;
     });
 
     try {
-      // Minta izin untuk mengakses penyimpanan
       if (await _requestStoragePermission()) {
-        // Dapatkan direktori Download
         Directory? downloadsDir;
 
         if (Platform.isAndroid) {
-          // Untuk Android, gunakan MediaStore atau folder Downloads umum
           downloadsDir = Directory('/storage/emulated/0/Download');
           if (!await downloadsDir.exists()) {
             downloadsDir = await getExternalStorageDirectory();
@@ -54,56 +218,75 @@ class _DetailDocumentPageState extends State<DetailDocumentPage> {
             }
           }
         } else {
-          // Untuk platform lain (misalnya iOS), gunakan getDownloadsDirectory()
           downloadsDir = await getDownloadsDirectory();
         }
 
         if (downloadsDir == null) {
-          throw Exception('Tidak dapat menemukan direktori Download');
+          throw Exception('Cannot find the Download directory');
         }
 
-        // Buat dokumen PDF
         final pdf = pw.Document();
-        final imageFile = File(widget.document.path!);
-        final imageBytes = await imageFile.readAsBytes();
-        final image = pw.MemoryImage(imageBytes);
+        List<String> imagePaths = widget.document.path!.split(',');
 
-        pdf.addPage(
-          pw.Page(
-            build: (pw.Context context) => pw.Center(
-              child: pw.Image(image),
-            ),
-          ),
-        );
+        for (var path in imagePaths) {
+          final imageFile = File(path);
+          final imageBytes = await imageFile.readAsBytes();
+          final image = pw.MemoryImage(imageBytes);
 
-        // Simpan file PDF ke folder Download
-        final sanitizedFileName = widget.document.name!
-            .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_'); // Sanitasi nama file
+          if (_selectedPageSize == 'A4') {
+            pdf.addPage(
+              pw.Page(
+                pageFormat: PdfPageFormat.a4,
+                build: (pw.Context context) {
+                  return pw.Center(
+                      child: pw.Image(image, fit: pw.BoxFit.contain));
+                },
+                margin: pw.EdgeInsets.all(20),
+              ),
+            );
+          } else {
+            final decodedImage = await decodeImageFromList(imageBytes);
+            pdf.addPage(
+              pw.Page(
+                pageFormat: PdfPageFormat(decodedImage.width.toDouble(),
+                    decodedImage.height.toDouble()),
+                build: (pw.Context context) {
+                  return pw.Center(child: pw.Image(image, fit: pw.BoxFit.fill));
+                },
+                margin: pw.EdgeInsets.zero,
+              ),
+            );
+          }
+        }
+
+        final sanitizedFileName =
+            widget.document.name!.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
         final filePath = '${downloadsDir.path}/$sanitizedFileName.pdf';
         final file = File(filePath);
         await file.writeAsBytes(await pdf.save());
 
-        // Simpan path file yang diunduh
-        _downloadedFilePath = filePath;
+        await _saveDownloadStatus(filePath);
 
-        // Tampilkan pesan sukses
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Dokumen berhasil diunduh ke $filePath')),
+          SnackBar(
+            content: Text('Document successfully downloaded to $filePath'),
+            backgroundColor: AppColors.primary,
+          ),
         );
-
-        setState(() {
-          _isDownloaded = true; // Set menjadi true setelah berhasil diunduh
-        });
       } else {
-        // Tampilkan pesan jika izin ditolak
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Izin penyimpanan ditolak')),
+          const SnackBar(
+            content: Text('Storage permit denied'),
+            backgroundColor: AppColors.primary,
+          ),
         );
       }
     } catch (e) {
-      // Tampilkan pesan error
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal mengunduh dokumen: $e')),
+        SnackBar(
+          content: Text('Failed to download the document: $e'),
+          backgroundColor: AppColors.primary,
+        ),
       );
     } finally {
       setState(() {
@@ -112,70 +295,52 @@ class _DetailDocumentPageState extends State<DetailDocumentPage> {
     }
   }
 
-  // Fungsi untuk berbagi file ke WhatsApp
   Future<void> _shareDocument() async {
-    if (_downloadedFilePath == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('File belum diunduh')),
-      );
-      return;
-    }
+    if (!_isDownloaded) {
+      await _showPageSizeDialog();
+    } else {
+      final file = File(_downloadedFilePath!);
 
-    // Menggunakan File untuk cek apakah file ada
-    final file = File(_downloadedFilePath!);
-
-    if (!await file.exists()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('File tidak ditemukan')),
-      );
-      return;
-    }
-
-    try {
-      // Cek apakah WhatsApp terpasang
-      final whatsappPackage = 'com.whatsapp';
-      bool isInstalled = await _isAppInstalled(whatsappPackage);
-      if (!isInstalled) {
+      if (!await file.exists()) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('WhatsApp tidak terpasang')),
+          const SnackBar(
+            content: Text('File not found'),
+            backgroundColor: AppColors.primary,
+          ),
         );
         return;
       }
 
-      // Mengonversi path ke XFile
-      final XFile downloadedFile = XFile(_downloadedFilePath!);
-
-      // Menggunakan shareXFiles untuk berbagi file
-      await Share.shareXFiles(
-        [downloadedFile],
-        text: 'Lihat dokumen ini!',
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal berbagi dokumen: $e')),
-      );
+      try {
+        final XFile downloadedFile = XFile(_downloadedFilePath!);
+        await Share.shareXFiles(
+          [downloadedFile],
+          text: 'View this document!',
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Document sharing failure: $e'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      }
     }
   }
 
-  // Fungsi untuk memeriksa apakah aplikasi tertentu terpasang
   Future<bool> _isAppInstalled(String packageName) async {
     if (Platform.isAndroid) {
-      // Menggunakan package_info_plus atau metode lain untuk memeriksa
-      // Namun, metode langsung tidak tersedia, jadi bisa menggunakan try-catch dengan launch
       try {
         final uri = Uri.parse('package:$packageName');
-        // Tidak ada metode langsung, jadi return true untuk contoh
-        return true; // Implementasikan pemeriksaan sebenarnya jika diperlukan
+        return true;
       } catch (e) {
         return false;
       }
     } else {
-      // Untuk iOS atau platform lain, implementasikan jika diperlukan
       return false;
     }
   }
 
-  // Fungsi untuk meminta izin penyimpanan
   Future<bool> _requestStoragePermission() async {
     if (Platform.isAndroid) {
       if (await Permission.manageExternalStorage.isGranted) {
@@ -185,7 +350,6 @@ class _DetailDocumentPageState extends State<DetailDocumentPage> {
         return status.isGranted;
       }
     } else {
-      // Untuk platform lain, minta izin penyimpanan standar
       if (await Permission.storage.isGranted) {
         return true;
       } else {
@@ -195,28 +359,27 @@ class _DetailDocumentPageState extends State<DetailDocumentPage> {
     }
   }
 
-  // Fungsi penghapusan yang sudah ada
   Future<void> _deleteDocument() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text(
-          "Konfirmasi",
+          "Confirmation",
           style: TextStyle(color: AppColors.primary),
         ),
-        content: const Text('Apakah Anda yakin ingin menghapus dokumen ini?'),
+        content: const Text('Are you sure you want to delete this document?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text(
-              "Batal",
+              "Cancel",
               style: TextStyle(color: AppColors.primary),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text(
-              "Hapus",
+              "Delete",
               style: TextStyle(color: AppColors.red),
             ),
           ),
@@ -237,16 +400,20 @@ class _DetailDocumentPageState extends State<DetailDocumentPage> {
         if (await file.exists()) {
           await file.delete();
         }
-
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Dokumen berhasil dihapus')),
+          const SnackBar(
+            content: Text('Document deleted successfully'),
+            backgroundColor: AppColors.primary,
+          ),
         );
-
         widget.onDocumentDeleted();
         Navigator.of(context).pop();
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal menghapus dokumen: $e')),
+          SnackBar(
+            content: Text('Failed to delete the document: $e'),
+            backgroundColor: AppColors.primary,
+          ),
         );
       } finally {
         setState(() {
@@ -260,7 +427,7 @@ class _DetailDocumentPageState extends State<DetailDocumentPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Detail Dokumen'),
+        title: const Text('Details Document'),
         actions: [
           IconButton(
             icon: _isDeleting
@@ -286,7 +453,7 @@ class _DetailDocumentPageState extends State<DetailDocumentPage> {
                     ),
                   )
                 : const Icon(Icons.download),
-            onPressed: _isDownloading ? null : _downloadDocument,
+            onPressed: _isDownloading ? null : _showPageSizeDialog,
           ),
         ],
       ),
@@ -294,7 +461,7 @@ class _DetailDocumentPageState extends State<DetailDocumentPage> {
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            widget.document.name ?? 'Dokumen Tanpa Nama',
+            widget.document.name ?? 'Unnamed Documents',
             style: const TextStyle(
               fontSize: 20.0,
               fontWeight: FontWeight.bold,
@@ -306,7 +473,7 @@ class _DetailDocumentPageState extends State<DetailDocumentPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                widget.document.category ?? 'Tidak Dikategorikan',
+                widget.document.category ?? 'Uncategorized',
                 style: const TextStyle(
                   fontSize: 16.0,
                   color: AppColors.primary,
@@ -322,33 +489,24 @@ class _DetailDocumentPageState extends State<DetailDocumentPage> {
             ],
           ),
           const SpaceHeight(12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Image.file(
-              File(widget.document.path!),
-              width: double.infinity,
-              fit: BoxFit.contain,
-              colorBlendMode: BlendMode.colorBurn,
-              color: AppColors.primary.withOpacity(0.2),
+          _buildImageListView(),
+          const SpaceHeight(12),
+          ElevatedButton.icon(
+            onPressed: _shareDocument,
+            icon: const Icon(Icons.share, color: AppColors.primary),
+            label: const Text(
+              "Share",
+              style: TextStyle(
+                fontSize: 16.0,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              side: BorderSide(color: AppColors.primary),
             ),
           ),
-          const SpaceHeight(12),
-          if (_isDownloaded) // Jika dokumen sudah diunduh, tampilkan tombol share
-            ElevatedButton.icon(
-              onPressed: _shareDocument, // Implementasikan fungsi share
-              icon: const Icon(Icons.share, color: AppColors.primary),
-              label: const Text(
-                "Share",
-                style: TextStyle(
-                    fontSize: 16.0,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primary),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                side: BorderSide(color: AppColors.primary),
-              ),
-            ),
         ],
       ),
     );
