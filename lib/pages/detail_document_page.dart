@@ -54,15 +54,38 @@ class _DetailDocumentPageState extends State<DetailDocumentPage> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          contentPadding: EdgeInsets.all(16),
-          content: GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
-            child: InteractiveViewer(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Image.file(File(imagePath)),
+          contentPadding: EdgeInsets.all(8),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                child: InteractiveViewer(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(File(imagePath)),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(
+                  height: 10), // Memberi jarak antara gambar dan tombol
+              ElevatedButton.icon(
+                onPressed: () => Navigator.of(context).pop(), // Menutup pop-up
+                icon: const Icon(Icons.arrow_back, color: AppColors.primary),
+                label: const Text(
+                  "Kembali",
+                  style: TextStyle(
+                    fontSize: 16.0,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  side: BorderSide(color: AppColors.primary),
+                ),
+              ),
+            ],
           ),
         );
       },
