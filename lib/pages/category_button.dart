@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../core/colors.dart';
 
 class CategoryButton extends StatelessWidget {
@@ -13,6 +12,19 @@ class CategoryButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
   });
+
+  IconData _getIconForLabel(String label) {
+    switch (label.toLowerCase()) {
+      case 'card':
+        return Icons.card_membership;
+      case 'note':
+        return Icons.note;
+      case 'mail':
+        return Icons.mail;
+      default:
+        return Icons.help_outline; // Ikon default jika label tidak cocok
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,8 +43,8 @@ class CategoryButton extends StatelessWidget {
           padding: const EdgeInsets.all(8.0),
           child: Column(
             children: [
-              const Icon(
-                Icons.description,
+              Icon(
+                _getIconForLabel(label),
                 size: 80.0,
                 color: AppColors.primary,
               ),
